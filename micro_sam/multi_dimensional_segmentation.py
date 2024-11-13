@@ -49,8 +49,14 @@ def _validate_projection(projection):
                 f"You have passed the invalid option {projection}."
             )
     elif isinstance(projection, dict):
-        assert len(projection.keys()) == 3, "There should be three parameters assigned for the projection method."
-        use_box, use_mask, use_points = projection["use_box"], projection["use_mask"], projection["use_points"]
+        assert (
+            len(projection.keys()) == 3
+        ), "There should be three parameters assigned for the projection method."
+        use_box, use_mask, use_points = (
+            projection["use_box"],
+            projection["use_mask"],
+            projection["use_points"],
+        )
     else:
         raise ValueError(f"{projection} is not a supported projection method.")
     return use_box, use_mask, use_points, use_single_point
@@ -60,11 +66,20 @@ def _validate_projection(projection):
 # In practice these did not make a big difference, so we do not use this at the moment.
 # We still leave it here for reference.
 def _advanced_stopping_criteria(
-    z, seg_z, seg_prev, z_start, z_increment, segmentation, criterion_choice, score, increment
+    z,
+    seg_z,
+    seg_prev,
+    z_start,
+    z_increment,
+    segmentation,
+    criterion_choice,
+    score,
+    increment,
 ):
     def _compute_mean_iou_for_n_slices(z, increment, seg_z, n_slices):
         iou_list = [
-            util.compute_iou(segmentation[z - increment * _slice], seg_z) for _slice in range(1, n_slices+1)
+            util.compute_iou(segmentation[z - increment * _slice], seg_z)
+            for _slice in range(1, n_slices + 1)
         ]
         return np.mean(iou_list)
 
@@ -81,7 +96,9 @@ def _advanced_stopping_criteria(
 
     elif criterion_choice == 3:
         # 3. iou of current segmented slice w.r.t the previous n slices
-        criterion = _compute_mean_iou_for_n_slices(z, increment, seg_z, min(5, abs(z - z_start)))
+        criterion = _compute_mean_iou_for_n_slices(
+            z, increment, seg_z, min(5, abs(z - z_start))
+        )
 
     return criterion
 
@@ -119,21 +136,38 @@ def segment_mask_in_volume(
         Array with the volumetric segmentation.
         Tuple with the first and last segmented slice.
     """
-    use_box, use_mask, use_points, use_single_point = _validate_projection(projection)
+    use_box, use_mask, use_points, use_single_point = _validate_projection(
+        projection
+    )
 
     if update_progress is None:
+
         def update_progress(*args):
             pass
 
-    def segment_range(z_start, z_stop, increment, stopping_criterion, threshold=None, verbose=False):
+    def segment_range(
+        z_start,
+        z_stop,
+        increment,
+        stopping_criterion,
+        threshold=None,
+        verbose=False,
+    ):
         z = z_start + increment
         while True:
             if verbose:
                 print(f"Segment {z_start} to {z_stop}: segmenting slice {z}")
             seg_prev = segmentation[z - increment]
             seg_z, score, _ = segment_from_mask(
-                predictor, seg_prev, image_embeddings=image_embeddings, i=z, use_mask=use_mask,
-                use_box=use_box, use_points=use_points, box_extension=box_extension, return_all=True,
+                predictor,
+                seg_prev,
+                image_embeddings=image_embeddings,
+                i=z,
+                use_mask=use_mask,
+                use_box=use_box,
+                use_points=use_points,
+                box_extension=box_extension,
+                return_all=True,
                 use_single_point=use_single_point,
             )
             if threshold is not None:
@@ -157,58 +191,102 @@ def segment_mask_in_volume(
 
     # segment below the min slice
     if z0 > 0 and not stop_lower:
-        z_min = segment_range(z0, 0, -1, np.less, iou_threshold, verbose=verbose)
+        z_min = segment_range(
+            z0, 0, -1, np.less, iou_threshold, verbose=verbose
+        )
     else:
         z_min = z0
 
     # segment above the max slice
     if z1 < segmentation.shape[0] - 1 and not stop_upper:
-        z_max = segment_range(z1, segmentation.shape[0] - 1, 1, np.greater, iou_threshold, verbose=verbose)
+        z_max = segment_range(
+            z1,
+            segmentation.shape[0] - 1,
+            1,
+            np.greater,
+            iou_threshold,
+            verbose=verbose,
+        )
     else:
         z_max = z1
 
     # segment in between min and max slice
     if z0 != z1:
-        for z_start, z_stop in zip(segmented_slices[:-1], segmented_slices[1:]):
+        for z_start, z_stop in zip(
+            segmented_slices[:-1], segmented_slices[1:]
+        ):
             slice_diff = z_stop - z_start
             z_mid = int((z_start + z_stop) // 2)
 
-            if slice_diff == 1:  # the slices are adjacent -> we don't need to do anything
+            if (
+                slice_diff == 1
+            ):  # the slices are adjacent -> we don't need to do anything
                 pass
 
-            elif z_start == z0 and stop_lower:  # the lower slice is stop: we just segment from upper
-                segment_range(z_stop, z_start, -1, np.less_equal, verbose=verbose)
+            elif (
+                z_start == z0 and stop_lower
+            ):  # the lower slice is stop: we just segment from upper
+                segment_range(
+                    z_stop, z_start, -1, np.less_equal, verbose=verbose
+                )
 
-            elif z_stop == z1 and stop_upper:  # the upper slice is stop: we just segment from lower
-                segment_range(z_start, z_stop, 1, np.greater_equal, verbose=verbose)
+            elif (
+                z_stop == z1 and stop_upper
+            ):  # the upper slice is stop: we just segment from lower
+                segment_range(
+                    z_start, z_stop, 1, np.greater_equal, verbose=verbose
+                )
 
-            elif slice_diff == 2:  # there is only one slice in between -> use combined mask
+            elif (
+                slice_diff == 2
+            ):  # there is only one slice in between -> use combined mask
                 z = z_start + 1
-                seg_prompt = np.logical_or(segmentation[z_start] == 1, segmentation[z_stop] == 1)
+                seg_prompt = np.logical_or(
+                    segmentation[z_start] == 1, segmentation[z_stop] == 1
+                )
                 segmentation[z] = segment_from_mask(
-                    predictor, seg_prompt, image_embeddings=image_embeddings, i=z,
-                    use_mask=use_mask, use_box=use_box, use_points=use_points,
-                    box_extension=box_extension
+                    predictor,
+                    seg_prompt,
+                    image_embeddings=image_embeddings,
+                    i=z,
+                    use_mask=use_mask,
+                    use_box=use_box,
+                    use_points=use_points,
+                    box_extension=box_extension,
                 )
                 update_progress(1)
 
             else:  # there is a range of more than 2 slices in between -> segment ranges
                 # segment from bottom
                 segment_range(
-                    z_start, z_mid, 1, np.greater_equal if slice_diff % 2 == 0 else np.greater, verbose=verbose
+                    z_start,
+                    z_mid,
+                    1,
+                    np.greater_equal if slice_diff % 2 == 0 else np.greater,
+                    verbose=verbose,
                 )
                 # segment from top
-                segment_range(z_stop, z_mid, -1, np.less_equal, verbose=verbose)
+                segment_range(
+                    z_stop, z_mid, -1, np.less_equal, verbose=verbose
+                )
                 # if the difference between start and stop is even,
                 # then we have a slice in the middle that is the same distance from top bottom
                 # in this case the slice is not segmented in the ranges above, and we segment it
                 # using the combined mask from the adjacent top and bottom slice as prompt
                 if slice_diff % 2 == 0:
-                    seg_prompt = np.logical_or(segmentation[z_mid - 1] == 1, segmentation[z_mid + 1] == 1)
+                    seg_prompt = np.logical_or(
+                        segmentation[z_mid - 1] == 1,
+                        segmentation[z_mid + 1] == 1,
+                    )
                     segmentation[z_mid] = segment_from_mask(
-                        predictor, seg_prompt, image_embeddings=image_embeddings, i=z_mid,
-                        use_mask=use_mask, use_box=use_box, use_points=use_points,
-                        box_extension=box_extension
+                        predictor,
+                        seg_prompt,
+                        image_embeddings=image_embeddings,
+                        i=z_mid,
+                        use_mask=use_mask,
+                        use_box=use_box,
+                        use_points=use_points,
+                        box_extension=box_extension,
                     )
                     update_progress(1)
 
@@ -220,7 +298,9 @@ def _preprocess_closing(slice_segmentation, gap_closing, pbar_update):
     # Use a structuring element that only closes elements in z, to avoid merging objects in-plane.
     structuring_element = np.zeros((3, 1, 1))
     structuring_element[:, 0, 0] = 1
-    closed_segmentation = binary_closing(binarized, iterations=gap_closing, structure=structuring_element)
+    closed_segmentation = binary_closing(
+        binarized, iterations=gap_closing, structure=structuring_element
+    )
 
     new_segmentation = np.zeros_like(slice_segmentation)
     n_slices = new_segmentation.shape[0]
@@ -242,8 +322,10 @@ def _preprocess_closing(slice_segmentation, gap_closing, pbar_update):
         # have overlap with more than one object from the initial segmentation.
         # This indicates wrong merging of closeby objects that we want to prevent.
         matches = nifty.ground_truth.overlap(closed_z, seg_z)
-        matches = {seg_id: matches.overlapArrays(seg_id, sorted=False)[0]
-                   for seg_id in range(1, int(closed_z.max() + 1))}
+        matches = {
+            seg_id: matches.overlapArrays(seg_id, sorted=False)[0]
+            for seg_id in range(1, int(closed_z.max() + 1))
+        }
         matches = {k: v[v != 0] for k, v in matches.items()}
 
         ids_initial, ids_closed = [], []
@@ -259,7 +341,9 @@ def _preprocess_closing(slice_segmentation, gap_closing, pbar_update):
 
         if ids_initial:
             initial_mask = np.isin(seg_z, ids_initial)
-            seg_new[initial_mask] = relabel_sequential(seg_z[initial_mask], offset=seg_new.max() + 1)[0]
+            seg_new[initial_mask] = relabel_sequential(
+                seg_z[initial_mask], offset=seg_new.max() + 1
+            )[0]
 
         seg_new, _, _ = relabel_sequential(seg_new, offset=offset)
         max_z = seg_new.max()
@@ -311,16 +395,22 @@ def merge_instance_segmentation_3d(
     Returns:
         The merged segmentation.
     """
-    _, pbar_init, pbar_update, pbar_close = util.handle_pbar(verbose, pbar_init, pbar_update)
+    _, pbar_init, pbar_update, pbar_close = util.handle_pbar(
+        verbose, pbar_init, pbar_update
+    )
 
     if gap_closing is not None and gap_closing > 0:
         pbar_init(slice_segmentation.shape[0] + 1, "Merge segmentation")
-        slice_segmentation = _preprocess_closing(slice_segmentation, gap_closing, pbar_update)
+        slice_segmentation = _preprocess_closing(
+            slice_segmentation, gap_closing, pbar_update
+        )
     else:
         pbar_init(1, "Merge segmentation")
 
     # Extract the overlap between slices.
-    edges = track_utils.compute_edges_from_overlap(slice_segmentation, verbose=False)
+    edges = track_utils.compute_edges_from_overlap(
+        slice_segmentation, verbose=False
+    )
 
     uv_ids = np.array([[edge["source"], edge["target"]] for edge in edges])
     overlaps = np.array([edge["score"] for edge in edges])
@@ -335,7 +425,9 @@ def merge_instance_segmentation_3d(
         bg_edges = (uv_ids == 0).any(axis=1)
         costs[bg_edges] = -8.0
 
-    node_labels = seg_utils.multicut.multicut_decomposition(graph, 1.0 - costs, beta=beta)
+    node_labels = seg_utils.multicut.multicut_decomposition(
+        graph, 1.0 - costs, beta=beta
+    )
 
     segmentation = nifty.tools.take(node_labels, slice_segmentation)
 
@@ -393,7 +485,7 @@ def automatic_3d_segmentation(
         The segmentation.
     """
     offset = 0
-    segmentation = np.zeros(volume.shape, dtype="uint32")
+    segmentation = np.zeros(volume.shape[:-1], dtype="uint32")
 
     min_object_size = kwargs.pop("min_object_size", 0)
     image_embeddings = util.precompute_image_embeddings(
@@ -406,13 +498,23 @@ def automatic_3d_segmentation(
         verbose=verbose,
     )
 
-    for i in tqdm(range(segmentation.shape[0]), desc="Segment slices", disable=not verbose):
-        segmentor.initialize(volume[i], image_embeddings=image_embeddings, verbose=False, i=i)
+    for i in tqdm(
+        range(segmentation.shape[0]),
+        desc="Segment slices",
+        disable=not verbose,
+    ):
+        segmentor.initialize(
+            volume[i], image_embeddings=image_embeddings, verbose=False, i=i
+        )
         seg = segmentor.generate(**kwargs)
         if len(seg) == 0:
             continue
         else:
-            seg = mask_data_to_segmentation(seg, with_background=with_background, min_object_size=min_object_size)
+            seg = mask_data_to_segmentation(
+                seg,
+                with_background=with_background,
+                min_object_size=min_object_size,
+            )
             max_z = seg.max()
             if max_z == 0:
                 continue
