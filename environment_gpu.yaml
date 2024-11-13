@@ -17,7 +17,7 @@ dependencies:
   - python-xxhash
   - python-elf >=0.4.8
   - pytorch >=2.4
-  - pytorch-cuda>=12.5 # you may need to update the cuda version to match your system
+  - pytorch-cuda>=12.4 # you may need to update the cuda version to match your system
   - segment-anything
   - torchvision
   - torch_em >=0.7.0
