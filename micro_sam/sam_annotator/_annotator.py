@@ -15,6 +15,7 @@ class _AnnotatorBase(QtWidgets.QScrollArea):
     Implements the logic for the 2d, 3d and tracking annotator.
     The annotators differ in their data dimensionality and the widgets.
     """
+
     def _create_layers(self):
         # Add the label layers for the current object, the automatic segmentation and the committed segmentation.
         dummy_data = np.zeros(self._shape, dtype="uint32")
@@ -41,24 +42,36 @@ class _AnnotatorBase(QtWidgets.QScrollArea):
 
         # Add the shape layer for box and other shape prompts.
         self._viewer.add_shapes(
-            face_color="transparent", edge_color="green", edge_width=4, name="prompts", ndim=self._ndim,
+            face_color="transparent",
+            edge_color="green",
+            edge_width=4,
+            name="prompts",
+            ndim=self._ndim,
         )
 
     # Child classes have to implement this function and create a dictionary with the widgets.
     def _get_widgets(self):
-        raise NotImplementedError("The child classes of _AnnotatorBase have to implement _get_widgets.")
+        raise NotImplementedError(
+            "The child classes of _AnnotatorBase have to implement _get_widgets."
+        )
 
     def _create_widgets(self):
         # Create the embedding widget and connect all events related to it.
         self._embedding_widget = widgets.EmbeddingWidget()
         # Connect events for the image selection box.
-        self._viewer.layers.events.inserted.connect(self._embedding_widget.image_selection.reset_choices)
-        self._viewer.layers.events.removed.connect(self._embedding_widget.image_selection.reset_choices)
+        self._viewer.layers.events.inserted.connect(
+            self._embedding_widget.image_selection.reset_choices
+        )
+        self._viewer.layers.events.removed.connect(
+            self._embedding_widget.image_selection.reset_choices
+        )
         # Connect the run button with the function to update the image.
         self._embedding_widget.run_button.clicked.connect(self._update_image)
 
         # Create the prompt widget. (The same for all plugins.)
-        self._prompt_widget = widgets.create_prompt_menu(self._point_prompt_layer, self._point_labels)
+        self._prompt_widget = widgets.create_prompt_menu(
+            self._point_prompt_layer, self._point_labels
+        )
 
         # Create the dictionray for the widgets and get the widgets of the child plugin.
         self._widgets = {
@@ -99,6 +112,7 @@ class _AnnotatorBase(QtWidgets.QScrollArea):
             self._widgets["clear"](viewer)
 
         if "segment_nd" in self._widgets:
+
             @self._viewer.bind_key("Shift-S", overwrite=True)
             def _seg_nd(viewer):
                 self._widgets["segment_nd"]()
@@ -147,7 +161,9 @@ class _AnnotatorBase(QtWidgets.QScrollArea):
         self._create_keybindings()
 
         # Add the widget to the scroll area.
-        self.setWidgetResizable(True)  # Allow widget to resize within scroll area.
+        self.setWidgetResizable(
+            True
+        )  # Allow widget to resize within scroll area.
         self.setWidget(self._annotator_widget)
 
     def _update_image(self, segmentation_result=None):
@@ -162,10 +178,16 @@ class _AnnotatorBase(QtWidgets.QScrollArea):
             self._shape = state.image_shape
 
         # Reset all layers.
-        self._viewer.layers["current_object"].data = np.zeros(self._shape, dtype="uint32")
-        self._viewer.layers["auto_segmentation"].data = np.zeros(self._shape, dtype="uint32")
+        self._viewer.layers["current_object"].data = np.zeros(
+            self._shape, dtype="uint32"
+        )
+        self._viewer.layers["auto_segmentation"].data = np.zeros(
+            self._shape, dtype="uint32"
+        )
         if segmentation_result is None or segmentation_result is False:
-            self._viewer.layers["committed_objects"].data = np.zeros(self._shape, dtype="uint32")
+            self._viewer.layers["committed_objects"].data = np.zeros(
+                self._shape, dtype="uint32"
+            )
         else:
             assert segmentation_result.shape == self._shape
             self._viewer.layers["committed_objects"].data = segmentation_result

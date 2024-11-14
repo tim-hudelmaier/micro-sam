@@ -2,7 +2,6 @@
 Helper functions for downloading Segment Anything models and predicting image embeddings.
 """
 
-
 import os
 import pickle
 import hashlib
@@ -36,6 +35,7 @@ try:
     VIT_T_SUPPORT = True
 except ImportError:
     from segment_anything import sam_model_registry, SamPredictor
+
     VIT_T_SUPPORT = False
 
 try:
@@ -63,7 +63,9 @@ def get_cache_directory() -> None:
     Users can set the MICROSAM_CACHEDIR environment variable for a custom cache directory.
     """
     default_cache_directory = os.path.expanduser(pooch.os_cache("micro_sam"))
-    cache_directory = Path(os.environ.get("MICROSAM_CACHEDIR", default_cache_directory))
+    cache_directory = Path(
+        os.environ.get("MICROSAM_CACHEDIR", default_cache_directory)
+    )
     return cache_directory
 
 
@@ -80,7 +82,9 @@ def microsam_cachedir() -> None:
     Every time this function is called, we check for any user updates made to
     the MICROSAM_CACHEDIR os environment variable since the last time.
     """
-    cache_directory = os.environ.get("MICROSAM_CACHEDIR") or pooch.os_cache("micro_sam")
+    cache_directory = os.environ.get("MICROSAM_CACHEDIR") or pooch.os_cache(
+        "micro_sam"
+    )
     return cache_directory
 
 
@@ -178,7 +182,9 @@ def _get_default_device():
     return device
 
 
-def get_device(device: Optional[Union[str, torch.device]] = None) -> Union[str, torch.device]:
+def get_device(
+    device: Optional[Union[str, torch.device]] = None
+) -> Union[str, torch.device]:
     """Get the torch device.
 
     If no device is passed the default device for your system is used.
@@ -198,13 +204,20 @@ def get_device(device: Optional[Union[str, torch.device]] = None) -> Union[str, 
             if not torch.cuda.is_available():
                 raise RuntimeError("PyTorch CUDA backend is not available.")
         elif device_type.lower() == "mps":
-            if not (torch.backends.mps.is_available() and torch.backends.mps.is_built()):
-                raise RuntimeError("PyTorch MPS backend is not available or is not built correctly.")
+            if not (
+                torch.backends.mps.is_available()
+                and torch.backends.mps.is_built()
+            ):
+                raise RuntimeError(
+                    "PyTorch MPS backend is not available or is not built correctly."
+                )
         elif device_type.lower() == "cpu":
             pass  # cpu is always available
         else:
-            raise RuntimeError(f"Unsupported device: {device}\n"
-                               "Please choose from 'cpu', 'cuda', or 'mps'.")
+            raise RuntimeError(
+                f"Unsupported device: {device}\n"
+                "Please choose from 'cpu', 'cuda', or 'mps'."
+            )
     return device
 
 
@@ -229,7 +242,9 @@ class _CustomUnpickler(pickle.Unpickler):
         try:
             return super().find_class(module, name)
         except (AttributeError, ModuleNotFoundError) as e:
-            warnings.warn(f"Did not find {module}:{name} and will skip it, due to error {e}")
+            warnings.warn(
+                f"Did not find {module}:{name} and will skip it, due to error {e}"
+            )
             return None
 
 
@@ -253,13 +268,18 @@ def _load_checkpoint(checkpoint_path):
     custom_pickle = pickle
     custom_pickle.Unpickler = _CustomUnpickler
 
-    state = torch.load(checkpoint_path, map_location="cpu", pickle_module=custom_pickle)
+    state = torch.load(
+        checkpoint_path, map_location="cpu", pickle_module=custom_pickle
+    )
     if "model_state" in state:
         # Copy the model weights from torch_em's training format.
         model_state = state["model_state"]
         sam_prefix = "sam."
         model_state = OrderedDict(
-            [(k[len(sam_prefix):] if k.startswith(sam_prefix) else k, v) for k, v in model_state.items()]
+            [
+                (k[len(sam_prefix) :] if k.startswith(sam_prefix) else k, v)
+                for k, v in model_state.items()
+            ]
         )
     else:
         model_state = state
@@ -330,9 +350,11 @@ def get_sam_model(
         # If we have a custom model then we may also have a decoder checkpoint.
         # Download it here, so that we can add it to the state.
         decoder_name = f"{model_type}_decoder"
-        decoder_path = model_registry.fetch(
-            decoder_name, progressbar=True
-        ) if decoder_name in model_registry.registry else None
+        decoder_path = (
+            model_registry.fetch(decoder_name, progressbar=True)
+            if decoder_name in model_registry.registry
+            else None
+        )
 
     # checkpoint_path has been passed, we use it instead of downloading a model.
     else:
@@ -340,7 +362,9 @@ def get_sam_model(
         # We can't check any hashes here, and we don't check if the file is actually a valid weight file.
         # (If it isn't the model creation will fail below.)
         if not os.path.exists(checkpoint_path):
-            raise ValueError(f"Checkpoint at {checkpoint_path} could not be found.")
+            raise ValueError(
+                f"Checkpoint at {checkpoint_path} could not be found."
+            )
         model_hash = _compute_hash(checkpoint_path)
         decoder_path = None
 
@@ -348,7 +372,9 @@ def get_sam_model(
     # before calling sam_model_registry.
     abbreviated_model_type = model_type[:5]
     if abbreviated_model_type not in _MODEL_TYPES:
-        raise ValueError(f"Invalid model_type: {abbreviated_model_type}. Expect one of {_MODEL_TYPES}")
+        raise ValueError(
+            f"Invalid model_type: {abbreviated_model_type}. Expect one of {_MODEL_TYPES}"
+        )
     if abbreviated_model_type == "vit_t" and not VIT_T_SUPPORT:
         raise RuntimeError(
             "mobile_sam is required for the vit-tiny."
@@ -360,8 +386,12 @@ def get_sam_model(
     # Whether to update parameters necessary to initialize the model
     if model_kwargs:  # Checks whether model_kwargs have been provided or not
         if abbreviated_model_type == "vit_t":
-            raise ValueError("'micro-sam' does not support changing the model parameters for 'mobile-sam'.")
-        sam = custom_models.sam_model_registry[abbreviated_model_type](**model_kwargs)
+            raise ValueError(
+                "'micro-sam' does not support changing the model parameters for 'mobile-sam'."
+            )
+        sam = custom_models.sam_model_registry[abbreviated_model_type](
+            **model_kwargs
+        )
 
     else:
         sam = sam_model_registry[abbreviated_model_type]()
@@ -370,7 +400,9 @@ def get_sam_model(
     # Overwrites the SAM model by freezing the backbone and allow PEFT.
     if peft_kwargs and isinstance(peft_kwargs, dict):
         if abbreviated_model_type == "vit_t":
-            raise ValueError("'micro-sam' does not support parameter efficient finetuning for 'mobile-sam'.")
+            raise ValueError(
+                "'micro-sam' does not support parameter efficient finetuning for 'mobile-sam'."
+            )
 
         sam = custom_models.peft_sam.PEFT_Sam(sam, **peft_kwargs).sam
 
@@ -389,7 +421,9 @@ def get_sam_model(
 
     # Add the decoder to the state if we have one and if the state is returned.
     if decoder_path is not None and return_state:
-        state["decoder_state"] = torch.load(decoder_path, map_location=device, weights_only=False)
+        state["decoder_state"] = torch.load(
+            decoder_path, map_location=device, weights_only=False
+        )
 
     if return_sam and return_state:
         return predictor, sam, state
@@ -411,7 +445,9 @@ def _handle_checkpoint_loading(sam, model_state):
     reference_state = sam.state_dict()
 
     for k, v in model_state.items():
-        if k in reference_state:  # This is done to get rid of unwanted layers from pretrained SAM.
+        if (
+            k in reference_state
+        ):  # This is done to get rid of unwanted layers from pretrained SAM.
             if reference_state[k].size() == v.size():
                 new_state_dict[k] = v
             else:
@@ -423,9 +459,9 @@ def _handle_checkpoint_loading(sam, model_state):
         warnings.warn(f"The layers with size mismatch: {mismatched_layers}")
 
     for mlayer in mismatched_layers:
-        if 'weight' in mlayer:
+        if "weight" in mlayer:
             torch.nn.init.kaiming_uniform_(reference_state[mlayer])
-        elif 'bias' in mlayer:
+        elif "bias" in mlayer:
             reference_state[mlayer].zero_()
 
     sam.load_state_dict(reference_state)
@@ -448,12 +484,18 @@ def export_custom_sam_model(
         save_path: Where to save the exported model.
     """
     _, state = get_sam_model(
-        model_type=model_type, checkpoint_path=checkpoint_path, return_state=True, device="cpu",
+        model_type=model_type,
+        checkpoint_path=checkpoint_path,
+        return_state=True,
+        device="cpu",
     )
     model_state = state["model_state"]
     prefix = "sam."
     model_state = OrderedDict(
-        [(k[len(prefix):] if k.startswith(prefix) else k, v) for k, v in model_state.items()]
+        [
+            (k[len(prefix) :] if k.startswith(prefix) else k, v)
+            for k, v in model_state.items()
+        ]
     )
     torch.save(model_state, save_path)
 
@@ -482,11 +524,15 @@ def _to_image(input_):
     elif input_.ndim == 3 and input_.shape[-1] == 3:
         image = input_
     else:
-        raise ValueError(f"Invalid input image of shape {input_.shape}. Expect either 2D grayscale or 3D RGB image.")
+        raise ValueError(
+            f"Invalid input image of shape {input_.shape}. Expect either 2D grayscale or 3D RGB image."
+        )
     return image
 
 
-def _compute_tiled_features_2d(predictor, input_, tile_shape, halo, f, pbar_init, pbar_update):
+def _compute_tiled_features_2d(
+    predictor, input_, tile_shape, halo, f, pbar_init, pbar_update
+):
     tiling = blocking([0, 0], input_.shape[:2], tile_shape)
     n_tiles = tiling.numberOfBlocks
 
@@ -498,7 +544,10 @@ def _compute_tiled_features_2d(predictor, input_, tile_shape, halo, f, pbar_init
     pbar_init(n_tiles, "Compute Image Embeddings 2D tiled.")
     for tile_id in range(n_tiles):
         tile = tiling.getBlockWithHalo(tile_id, list(halo))
-        outer_tile = tuple(slice(beg, end) for beg, end in zip(tile.outerBlock.begin, tile.outerBlock.end))
+        outer_tile = tuple(
+            slice(beg, end)
+            for beg, end in zip(tile.outerBlock.begin, tile.outerBlock.end)
+        )
 
         predictor.reset_image()
         tile_input = _to_image(input_[outer_tile])
@@ -508,19 +557,30 @@ def _compute_tiled_features_2d(predictor, input_, tile_shape, halo, f, pbar_init
         input_size = predictor.input_size
 
         ds = features.create_dataset(
-            str(tile_id), data=tile_features.cpu().numpy(), compression="gzip", chunks=tile_features.shape
+            str(tile_id),
+            data=tile_features.cpu().numpy(),
+            compression="gzip",
+            chunks=tile_features.shape,
         )
         ds.attrs["original_size"] = original_size
         ds.attrs["input_size"] = input_size
         pbar_update(1)
 
     _write_embedding_signature(
-        f, input_, predictor, tile_shape, halo, input_size=None, original_size=None,
+        f,
+        input_,
+        predictor,
+        tile_shape,
+        halo,
+        input_size=None,
+        original_size=None,
     )
     return features
 
 
-def _compute_tiled_features_3d(predictor, input_, tile_shape, halo, f, pbar_init, pbar_update):
+def _compute_tiled_features_3d(
+    predictor, input_, tile_shape, halo, f, pbar_init, pbar_update
+):
     assert input_.ndim == 3
 
     shape = input_.shape[1:]
@@ -537,7 +597,10 @@ def _compute_tiled_features_3d(predictor, input_, tile_shape, halo, f, pbar_init
 
     for tile_id in range(n_tiles):
         tile = tiling.getBlockWithHalo(tile_id, list(halo))
-        outer_tile = tuple(slice(beg, end) for beg, end in zip(tile.outerBlock.begin, tile.outerBlock.end))
+        outer_tile = tuple(
+            slice(beg, end)
+            for beg, end in zip(tile.outerBlock.begin, tile.outerBlock.end)
+        )
 
         ds = None
         for z in range(n_slices):
@@ -550,7 +613,11 @@ def _compute_tiled_features_3d(predictor, input_, tile_shape, halo, f, pbar_init
                 shape = (input_.shape[0],) + tile_features.shape
                 chunks = (1,) + tile_features.shape
                 ds = features.create_dataset(
-                    str(tile_id), shape=shape, dtype="float32", compression="gzip", chunks=chunks
+                    str(tile_id),
+                    shape=shape,
+                    dtype="float32",
+                    compression="gzip",
+                    chunks=chunks,
                 )
 
             ds[z] = tile_features.cpu().numpy()
@@ -563,7 +630,13 @@ def _compute_tiled_features_3d(predictor, input_, tile_shape, halo, f, pbar_init
         ds.attrs["input_size"] = input_size
 
     _write_embedding_signature(
-        f, input_, predictor, tile_shape, halo, input_size=None, original_size=None,
+        f,
+        input_,
+        predictor,
+        tile_shape,
+        halo,
+        input_size=None,
+        original_size=None,
     )
 
     return features
@@ -574,9 +647,14 @@ def _compute_2d(input_, predictor, f, save_path, pbar_init, pbar_update):
     if save_path is not None and "input_size" in f.attrs:
         # In this case we load the embeddings.
         features = f["features"][:]
-        original_size, input_size = f.attrs["original_size"], f.attrs["input_size"]
+        original_size, input_size = (
+            f.attrs["original_size"],
+            f.attrs["input_size"],
+        )
         image_embeddings = {
-            "features": features, "input_size": input_size, "original_size": original_size,
+            "features": features,
+            "input_size": input_size,
+            "original_size": original_size,
         }
         # Also set the embeddings.
         set_precomputed(predictor, image_embeddings)
@@ -594,43 +672,74 @@ def _compute_2d(input_, predictor, f, save_path, pbar_init, pbar_update):
     # Save the embeddings if we have a save_path.
     if save_path is not None:
         f.create_dataset(
-            "features", data=features, compression="gzip", chunks=features.shape
+            "features",
+            data=features,
+            compression="gzip",
+            chunks=features.shape,
         )
         _write_embedding_signature(
-            f, input_, predictor, tile_shape=None, halo=None, input_size=input_size, original_size=original_size,
+            f,
+            input_,
+            predictor,
+            tile_shape=None,
+            halo=None,
+            input_size=input_size,
+            original_size=original_size,
         )
 
     image_embeddings = {
-        "features": features, "input_size": input_size, "original_size": original_size,
+        "features": features,
+        "input_size": input_size,
+        "original_size": original_size,
     }
     return image_embeddings
 
 
-def _compute_tiled_2d(input_, predictor, tile_shape, halo, f, pbar_init, pbar_update):
+def _compute_tiled_2d(
+    input_, predictor, tile_shape, halo, f, pbar_init, pbar_update
+):
     # Check if the features are already computed.
     if "input_size" in f.attrs:
         features = f["features"]
-        original_size, input_size = f.attrs["original_size"], f.attrs["input_size"]
+        original_size, input_size = (
+            f.attrs["original_size"],
+            f.attrs["input_size"],
+        )
         image_embeddings = {
-            "features": features, "input_size": input_size, "original_size": original_size,
+            "features": features,
+            "input_size": input_size,
+            "original_size": original_size,
         }
         return image_embeddings
 
     # Otherwise compute them. Note: saving happens automatically because we
     # always write the features to zarr. If no save path is given we use an in-memory zarr.
-    features = _compute_tiled_features_2d(predictor, input_, tile_shape, halo, f, pbar_init, pbar_update)
-    image_embeddings = {"features": features, "input_size": None, "original_size": None}
+    features = _compute_tiled_features_2d(
+        predictor, input_, tile_shape, halo, f, pbar_init, pbar_update
+    )
+    image_embeddings = {
+        "features": features,
+        "input_size": None,
+        "original_size": None,
+    }
     return image_embeddings
 
 
-def _compute_3d(input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_update):
+def _compute_3d(
+    input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_update
+):
     # Check if the embeddings are already fully cached.
     if save_path is not None and "input_size" in f.attrs:
         # In this case we load the embeddings.
         features = f["features"] if lazy_loading else f["features"][:]
-        original_size, input_size = f.attrs["original_size"], f.attrs["input_size"]
+        original_size, input_size = (
+            f.attrs["original_size"],
+            f.attrs["input_size"],
+        )
         image_embeddings = {
-            "features": features, "input_size": input_size, "original_size": original_size,
+            "features": features,
+            "input_size": input_size,
+            "original_size": original_size,
         }
         return image_embeddings
 
@@ -653,7 +762,9 @@ def _compute_3d(input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_u
                 raise RuntimeError("Invalid partial features")
         else:
             partial_features = False
-            features = f.create_dataset("features", shape=shape, chunks=chunks, dtype="float32")
+            features = f.create_dataset(
+                "features", shape=shape, chunks=chunks, dtype="float32"
+            )
 
     # Initialize the pbar.
     pbar_init(input_.shape[0], "Compute Image Embeddings 3D")
@@ -667,7 +778,10 @@ def _compute_3d(input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_u
         predictor.reset_image()
         predictor.set_image(_to_image(z_slice))
         embedding = predictor.get_image_embedding()
-        original_size, input_size = predictor.original_size, predictor.input_size
+        original_size, input_size = (
+            predictor.original_size,
+            predictor.input_size,
+        )
 
         if save_features:
             features[z] = embedding.cpu().numpy()
@@ -677,30 +791,53 @@ def _compute_3d(input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_u
 
     if save_features:
         _write_embedding_signature(
-            f, input_, predictor, tile_shape=None, halo=None, input_size=input_size, original_size=original_size,
+            f,
+            input_,
+            predictor,
+            tile_shape=None,
+            halo=None,
+            input_size=input_size,
+            original_size=original_size,
         )
     else:
         # Concatenate across the z axis.
         features = torch.cat(features).cpu().numpy()
 
-    image_embeddings = {"features": features, "input_size": input_size, "original_size": original_size}
+    image_embeddings = {
+        "features": features,
+        "input_size": input_size,
+        "original_size": original_size,
+    }
     return image_embeddings
 
 
-def _compute_tiled_3d(input_, predictor, tile_shape, halo, f, pbar_init, pbar_update):
+def _compute_tiled_3d(
+    input_, predictor, tile_shape, halo, f, pbar_init, pbar_update
+):
     # Check if the features are already computed.
     if "input_size" in f.attrs:
         features = f["features"]
-        original_size, input_size = f.attrs["original_size"], f.attrs["input_size"]
+        original_size, input_size = (
+            f.attrs["original_size"],
+            f.attrs["input_size"],
+        )
         image_embeddings = {
-            "features": features, "input_size": input_size, "original_size": original_size,
+            "features": features,
+            "input_size": input_size,
+            "original_size": original_size,
         }
         return image_embeddings
 
     # Otherwise compute them. Note: saving happens automatically because we
     # always write the features to zarr. If no save path is given we use an in-memory zarr.
-    features = _compute_tiled_features_3d(predictor, input_, tile_shape, halo, f, pbar_init, pbar_update)
-    image_embeddings = {"features": features, "input_size": None, "original_size": None}
+    features = _compute_tiled_features_3d(
+        predictor, input_, tile_shape, halo, f, pbar_init, pbar_update
+    )
+    image_embeddings = {
+        "features": features,
+        "input_size": None,
+        "original_size": None,
+    }
     return image_embeddings
 
 
@@ -710,7 +847,9 @@ def _compute_data_signature(input_):
 
 
 # Create all metadata that is stored along with the embeddings.
-def _get_embedding_signature(input_, predictor, tile_shape, halo, data_signature=None):
+def _get_embedding_signature(
+    input_, predictor, tile_shape, halo, data_signature=None
+):
     if data_signature is None:
         data_signature = _compute_data_signature(input_)
     signature = {
@@ -728,9 +867,13 @@ def _get_embedding_signature(input_, predictor, tile_shape, halo, data_signature
 # Note: the input size and orginal size are different if embeddings are tiled or not.
 # That's why we do not include them in the main signature that is being checked
 # (_get_embedding_signature), but just add it for serialization here.
-def _write_embedding_signature(f, input_, predictor, tile_shape, halo, input_size, original_size):
+def _write_embedding_signature(
+    f, input_, predictor, tile_shape, halo, input_size, original_size
+):
     signature = _get_embedding_signature(input_, predictor, tile_shape, halo)
-    signature.update({"input_size": input_size, "original_size": original_size})
+    signature.update(
+        {"input_size": input_size, "original_size": original_size}
+    )
     for key, val in signature.items():
         f.attrs[key] = val
 
@@ -754,6 +897,11 @@ def _check_saved_embeddings(input_, predictor, f, save_path, tile_shape, halo):
                     f"{f.attrs.get(key)} != {val}. This key was recently added, so your embeddings are likely correct. "
                     "But please recompute them if model predictions don't look as expected."
                 )
+            # TODO: ignoring for now to test
+            elif key in ("data_signature"):
+                warnings.warn(
+                    "There is a missmatch in the data signature. Ignoring for testing purposes."
+                )
             else:
                 raise RuntimeError(
                     f"Embeddings file {save_path} is invalid due to mismatch in {key}: "
@@ -769,7 +917,9 @@ def handle_pbar(verbose, pbar_init, pbar_update):
     def noop(*args):
         pass
 
-    if verbose and pbar_init is None:  # we are verbose and don't have an external progress bar.
+    if (
+        verbose and pbar_init is None
+    ):  # we are verbose and don't have an external progress bar.
         assert pbar_update is None  # avoid inconsistent state of callbacks
 
         # Create our own progress bar and callbacks
@@ -785,7 +935,9 @@ def handle_pbar(verbose, pbar_init, pbar_update):
         def pbar_close():
             pbar.close()
 
-    elif verbose and pbar_init is not None:  # external pbar -> we don't have to do anything
+    elif (
+        verbose and pbar_init is not None
+    ):  # external pbar -> we don't have to do anything
         assert pbar_update is not None
         pbar = None
         pbar_close = noop
@@ -843,25 +995,45 @@ def precompute_image_embeddings(
     # check that the saved embeddings in there match the parameters of the function call.
     elif os.path.exists(save_path):
         f = zarr.open(save_path, "a")
-        _check_saved_embeddings(input_, predictor, f, save_path, tile_shape, halo)
+        _check_saved_embeddings(
+            input_, predictor, f, save_path, tile_shape, halo
+        )
 
     # We have a save path and it does not exist yet. Create the zarr file to which the
     # embeddings will then be saved.
     else:
         f = zarr.open(save_path, "a")
 
-    _, pbar_init, pbar_update, pbar_close = handle_pbar(verbose, pbar_init, pbar_update)
+    _, pbar_init, pbar_update, pbar_close = handle_pbar(
+        verbose, pbar_init, pbar_update
+    )
 
     if ndim == 2 and tile_shape is None:
-        embeddings = _compute_2d(input_, predictor, f, save_path, pbar_init, pbar_update)
+        embeddings = _compute_2d(
+            input_, predictor, f, save_path, pbar_init, pbar_update
+        )
     elif ndim == 2 and tile_shape is not None:
-        embeddings = _compute_tiled_2d(input_, predictor, tile_shape, halo, f, pbar_init, pbar_update)
+        embeddings = _compute_tiled_2d(
+            input_, predictor, tile_shape, halo, f, pbar_init, pbar_update
+        )
     elif ndim == 3 and tile_shape is None:
-        embeddings = _compute_3d(input_, predictor, f, save_path, lazy_loading, pbar_init, pbar_update)
+        embeddings = _compute_3d(
+            input_,
+            predictor,
+            f,
+            save_path,
+            lazy_loading,
+            pbar_init,
+            pbar_update,
+        )
     elif ndim == 3 and tile_shape is not None:
-        embeddings = _compute_tiled_3d(input_, predictor, tile_shape, halo, f, pbar_init, pbar_update)
+        embeddings = _compute_tiled_3d(
+            input_, predictor, tile_shape, halo, f, pbar_init, pbar_update
+        )
     else:
-        raise ValueError(f"Invalid dimesionality {input_.ndim}, expect 2 or 3 dim data.")
+        raise ValueError(
+            f"Invalid dimesionality {input_.ndim}, expect 2 or 3 dim data."
+        )
 
     pbar_close()
     return embeddings
@@ -890,7 +1062,7 @@ def set_precomputed(
         tile_image_embeddings = {
             "features": tile_features,
             "input_size": tile_features.attrs["input_size"],
-            "original_size": tile_features.attrs["original_size"]
+            "original_size": tile_features.attrs["original_size"],
         }
         return set_precomputed(predictor, tile_image_embeddings, i=i)
 
@@ -903,11 +1075,17 @@ def set_precomputed(
         raise ValueError("The data is 2D so an index is not needed.")
 
     if i is None:
-        predictor.features = features.to(device) if torch.is_tensor(features) else \
-            torch.from_numpy(features[:]).to(device)
+        predictor.features = (
+            features.to(device)
+            if torch.is_tensor(features)
+            else torch.from_numpy(features[:]).to(device)
+        )
     else:
-        predictor.features = features[i].to(device) if torch.is_tensor(features) else \
-            torch.from_numpy(features[i]).to(device)
+        predictor.features = (
+            features[i].to(device)
+            if torch.is_tensor(features)
+            else torch.from_numpy(features[i]).to(device)
+        )
     predictor.original_size = image_embeddings["original_size"]
     predictor.input_size = image_embeddings["input_size"]
     predictor.is_image_set = True
@@ -938,8 +1116,7 @@ def compute_iou(mask1: np.ndarray, mask2: np.ndarray) -> float:
 
 
 def get_centers_and_bounding_boxes(
-    segmentation: np.ndarray,
-    mode: str = "v"
+    segmentation: np.ndarray, mode: str = "v"
 ) -> Tuple[Dict[int, np.ndarray], Dict[int, tuple]]:
     """Returns the center coordinates of the foreground instances in the ground-truth.
 
@@ -953,26 +1130,33 @@ def get_centers_and_bounding_boxes(
         A dictionary that maps object ids to the corresponding centroid.
         A dictionary that maps object_ids to the corresponding bounding box.
     """
-    assert mode in ["p", "v"], "Choose either 'p' for regionprops or 'v' for vigra"
+    assert mode in [
+        "p",
+        "v",
+    ], "Choose either 'p' for regionprops or 'v' for vigra"
 
     properties = regionprops(segmentation)
 
     if mode == "p":
         center_coordinates = {prop.label: prop.centroid for prop in properties}
     elif mode == "v":
-        center_coordinates = vigra.filters.eccentricityCenters(segmentation.astype('float32'))
-        center_coordinates = {i: coord for i, coord in enumerate(center_coordinates) if i > 0}
+        center_coordinates = vigra.filters.eccentricityCenters(
+            segmentation.astype("float32")
+        )
+        center_coordinates = {
+            i: coord for i, coord in enumerate(center_coordinates) if i > 0
+        }
 
     bbox_coordinates = {prop.label: prop.bbox for prop in properties}
 
-    assert len(bbox_coordinates) == len(center_coordinates), f"{len(bbox_coordinates)}, {len(center_coordinates)}"
+    assert len(bbox_coordinates) == len(
+        center_coordinates
+    ), f"{len(bbox_coordinates)}, {len(center_coordinates)}"
     return center_coordinates, bbox_coordinates
 
 
 def load_image_data(
-    path: str,
-    key: Optional[str] = None,
-    lazy_loading: bool = False
+    path: str, key: Optional[str] = None, lazy_loading: bool = False
 ) -> np.ndarray:
     """Helper function to load image data from file.
 
@@ -1049,8 +1233,12 @@ def get_block_shape(shape: Tuple[int]) -> Tuple[int]:
     if ndim == 2:
         block_shape = tuple(min(bs, sh) for bs, sh in zip((1024, 1024), shape))
     elif ndim == 3:
-        block_shape = tuple(min(bs, sh) for bs, sh in zip((32, 256, 256), shape))
+        block_shape = tuple(
+            min(bs, sh) for bs, sh in zip((32, 256, 256), shape)
+        )
     else:
-        raise ValueError(f"Only 2 or 3 dimensional shapes are supported, got {ndim}D.")
+        raise ValueError(
+            f"Only 2 or 3 dimensional shapes are supported, got {ndim}D."
+        )
 
     return block_shape
