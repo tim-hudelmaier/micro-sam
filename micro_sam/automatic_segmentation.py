@@ -7,7 +7,11 @@ import imageio.v3 as imageio
 
 from . import util
 from .instance_segmentation import (
-    get_amg, get_decoder, mask_data_to_segmentation, InstanceSegmentationWithDecoder, AMGBase
+    get_amg,
+    get_decoder,
+    mask_data_to_segmentation,
+    InstanceSegmentationWithDecoder,
+    AMGBase,
 )
 from .multi_dimensional_segmentation import automatic_3d_segmentation
 
@@ -41,7 +45,10 @@ def get_predictor_and_segmenter(
 
     # Get the predictor and state for Segment Anything models.
     predictor, state = util.get_sam_model(
-        model_type=model_type, device=device, checkpoint_path=checkpoint, return_state=True,
+        model_type=model_type,
+        device=device,
+        checkpoint_path=checkpoint,
+        return_state=True,
     )
 
     if amg is None:
@@ -50,15 +57,18 @@ def get_predictor_and_segmenter(
         decoder = None
     else:
         if "decoder_state" not in state:
-            raise RuntimeError("You have passed amg=False, but your model does not contain a segmentation decoder.")
+            raise RuntimeError(
+                "You have passed amg=False, but your model does not contain a segmentation decoder."
+            )
         decoder_state = state["decoder_state"]
-        decoder = get_decoder(image_encoder=predictor.model.image_encoder, decoder_state=decoder_state, device=device)
+        decoder = get_decoder(
+            image_encoder=predictor.model.image_encoder,
+            decoder_state=decoder_state,
+            device=device,
+        )
 
     segmenter = get_amg(
-        predictor=predictor,
-        is_tiled=is_tiled,
-        decoder=decoder,
-        **kwargs
+        predictor=predictor, is_tiled=is_tiled, decoder=decoder, **kwargs
     )
     return predictor, segmenter
 
@@ -74,7 +84,7 @@ def automatic_instance_segmentation(
     tile_shape: Optional[Tuple[int, int]] = None,
     halo: Optional[Tuple[int, int]] = None,
     verbose: bool = True,
-    **generate_kwargs
+    **generate_kwargs,
 ) -> np.ndarray:
     """Run automatic segmentation for the input image.
 
@@ -106,8 +116,12 @@ def automatic_instance_segmentation(
     ndim = image_data.ndim if ndim is None else ndim
 
     if ndim == 2:
-        if (image_data.ndim != 2) and (image_data.ndim != 3 and image_data.shape[-1] != 3):
-            raise ValueError(f"The inputs does not match the shape expectation of 2d inputs: {image_data.shape}")
+        if (image_data.ndim != 2) and (
+            image_data.ndim != 3 and image_data.shape[-1] != 3
+        ):
+            raise ValueError(
+                f"The inputs does not match the shape expectation of 2d inputs: {image_data.shape}"
+            )
 
         # Precompute the image embeddings.
         image_embeddings = util.precompute_image_embeddings(
@@ -120,10 +134,14 @@ def automatic_instance_segmentation(
             verbose=verbose,
         )
 
-        segmenter.initialize(image=image_data, image_embeddings=image_embeddings)
+        segmenter.initialize(
+            image=image_data, image_embeddings=image_embeddings
+        )
         masks = segmenter.generate(**generate_kwargs)
 
-        if len(masks) == 0:  # instance segmentation can have no masks, hence we just save empty labels
+        if (
+            len(masks) == 0
+        ):  # instance segmentation can have no masks, hence we just save empty labels
             if isinstance(segmenter, InstanceSegmentationWithDecoder):
                 this_shape = segmenter._foreground.shape
             elif isinstance(segmenter, AMGBase):
@@ -133,10 +151,16 @@ def automatic_instance_segmentation(
 
             instances = np.zeros(this_shape, dtype="uint32")
         else:
-            instances = mask_data_to_segmentation(masks, with_background=True, min_object_size=0)
+            instances = mask_data_to_segmentation(
+                masks, with_background=True, min_object_size=0
+            )
     else:
-        if (image_data.ndim != 3) and (image_data.ndim != 4 and image_data.shape[-1] != 3):
-            raise ValueError(f"The inputs does not match the shape expectation of 3d inputs: {image_data.shape}")
+        if (image_data.ndim != 3) and (
+            image_data.ndim != 4 and image_data.shape[-1] != 3
+        ):
+            raise ValueError(
+                f"The inputs does not match the shape expectation of 3d inputs: {image_data.shape}"
+            )
 
         instances = automatic_3d_segmentation(
             volume=image_data,
@@ -146,7 +170,7 @@ def automatic_instance_segmentation(
             tile_shape=tile_shape,
             halo=halo,
             verbose=verbose,
-            **generate_kwargs
+            **generate_kwargs,
         )
 
     if output_path is not None:
@@ -164,52 +188,83 @@ def main():
     available_models = list(util.get_model_names())
     available_models = ", ".join(available_models)
 
-    parser = argparse.ArgumentParser(description="Run automatic segmentation for an image.")
+    parser = argparse.ArgumentParser(
+        description="Run automatic segmentation for an image."
+    )
     parser.add_argument(
-        "-i", "--input_path", required=True,
+        "-i",
+        "--input_path",
+        required=True,
         help="The filepath to the image data. Supports all data types that can be read by imageio (e.g. tif, png, ...) "
-        "or elf.io.open_file (e.g. hdf5, zarr, mrc). For the latter you also need to pass the 'key' parameter."
+        "or elf.io.open_file (e.g. hdf5, zarr, mrc). For the latter you also need to pass the 'key' parameter.",
     )
     parser.add_argument(
-        "-o", "--output_path", required=True,
-        help="The filepath to store the instance segmentation. The current support stores segmentation in a 'tif' file."
+        "-o",
+        "--output_path",
+        required=True,
+        help="The filepath to store the instance segmentation. The current support stores segmentation in a 'tif' file.",
     )
     parser.add_argument(
-        "-e", "--embedding_path", default=None, type=str, help="The path where the embeddings will be saved."
+        "-e",
+        "--embedding_path",
+        default=None,
+        type=str,
+        help="The path where the embeddings will be saved.",
     )
     parser.add_argument(
-        "--pattern", help="Pattern / wildcard for selecting files in a folder. To select all files use '*'."
+        "--pattern",
+        help="Pattern / wildcard for selecting files in a folder. To select all files use '*'.",
     )
     parser.add_argument(
-        "-k", "--key",
+        "-k",
+        "--key",
         help="The key for opening data with elf.io.open_file. This is the internal path for a hdf5 or zarr container, "
-        "for an image stack it is a wild-card, e.g. '*.png' and for mrc it is 'data'."
+        "for an image stack it is a wild-card, e.g. '*.png' and for mrc it is 'data'.",
     )
     parser.add_argument(
-        "-m", "--model_type", default=util._DEFAULT_MODEL,
-        help=f"The segment anything model that will be used, one of {available_models}."
+        "-m",
+        "--model_type",
+        default=util._DEFAULT_MODEL,
+        help=f"The segment anything model that will be used, one of {available_models}.",
     )
     parser.add_argument(
-        "-c", "--checkpoint", default=None,
-        help="Checkpoint from which the SAM model will be loaded loaded."
+        "-c",
+        "--checkpoint",
+        default=None,
+        help="Checkpoint from which the SAM model will be loaded loaded.",
     )
     parser.add_argument(
-        "--tile_shape", nargs="+", type=int, help="The tile shape for using tiled prediction.", default=None
+        "--tile_shape",
+        nargs="+",
+        type=int,
+        help="The tile shape for using tiled prediction.",
+        default=None,
     )
     parser.add_argument(
-        "--halo", nargs="+", type=int, help="The halo for using tiled prediction.", default=None
+        "--halo",
+        nargs="+",
+        type=int,
+        help="The halo for using tiled prediction.",
+        default=None,
     )
     parser.add_argument(
-        "-n", "--ndim", type=int, default=None,
-        help="The number of spatial dimensions in the data. Please specify this if your data has a channel dimension."
+        "-n",
+        "--ndim",
+        type=int,
+        default=None,
+        help="The number of spatial dimensions in the data. Please specify this if your data has a channel dimension.",
     )
     parser.add_argument(
-        "--amg", action="store_true", help="Whether to use automatic mask generation with the model."
+        "--amg",
+        action="store_true",
+        help="Whether to use automatic mask generation with the model.",
     )
     parser.add_argument(
-        "-d", "--device", default=None,
+        "-d",
+        "--device",
+        default=None,
         help="The device to use for the predictor. Can be one of 'cuda', 'cpu' or 'mps' (only MAC)."
-        "By default the most performant available device will be selected."
+        "By default the most performant available device will be selected.",
     )
 
     args, parameter_args = parser.parse_known_args()
@@ -225,7 +280,8 @@ def main():
     # NOTE: the script below allows the possibility to catch additional parsed arguments which correspond to
     # the automatic segmentation post-processing parameters (eg. 'center_distance_threshold' in AIS)
     generate_kwargs = {
-        parameter_args[i].lstrip("--"): _convert_argval(parameter_args[i + 1]) for i in range(0, len(parameter_args), 2)
+        parameter_args[i].lstrip("--"): _convert_argval(parameter_args[i + 1])
+        for i in range(0, len(parameter_args), 2)
     }
 
     predictor, segmenter = get_predictor_and_segmenter(
